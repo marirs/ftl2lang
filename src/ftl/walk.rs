@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use fluent_syntax::ast;
 use fluent_syntax::parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A single contiguous run of translatable text extracted from an FTL pattern.
 ///
@@ -15,8 +15,11 @@ pub struct TranslatableSpan {
     pub entry_id: String,
     /// `None` for the message/term value itself; `Some(name)` for an attribute.
     pub attribute: Option<String>,
-    /// Sequential index of this span within the entry (value spans first, then
-    /// attribute spans in declaration order).
+    /// Sequential index of this span within the entry. The counter is shared
+    /// across the entry's value and all of its attributes (in declaration
+    /// order), and is NOT reset when entering attributes. The pair
+    /// `(entry_id, span_index)` uniquely identifies a span — `attribute` is
+    /// informational and need not be part of any splice-back key.
     pub span_index: usize,
     /// Trimmed translatable text — never empty, never whitespace-only.
     pub text: String,
@@ -32,9 +35,16 @@ pub struct TranslatableSpan {
 /// found in message/term values and their attributes. Select-expression
 /// variants are walked recursively so their literal text arms are included.
 /// Pure placeables (variable/term references, function calls) produce no spans.
-pub fn walk_source(src: &str) -> Result<Vec<TranslatableSpan>, AppError> {
+///
+/// `path` is reported in parse errors so users can see which file failed.
+/// Pass `None` when the source did not come from a file on disk.
+pub fn walk_source(src: &str, path: Option<&Path>) -> Result<Vec<TranslatableSpan>, AppError> {
+    // On parse failure fluent-syntax returns a partially-recovered Resource
+    // alongside the error list. We deliberately discard that partial AST and
+    // refuse to walk anything: a translation tool must not silently translate
+    // half of a malformed file.
     let resource = parser::parse(src).map_err(|(_, errs)| AppError::FtlParse {
-        path: PathBuf::from("<input>"),
+        path: path.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("<input>")),
         message: format!("{} error(s); first: {:?}", errs.len(), errs.first()),
     })?;
 

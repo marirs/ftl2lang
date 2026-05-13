@@ -1,18 +1,26 @@
 use super::Translator;
 use crate::error::AppError;
 use async_trait::async_trait;
-use futures::stream::{FuturesOrdered, StreamExt};
+use futures::stream::{self, StreamExt};
 use reqwest::Client;
 use std::time::Duration;
 
+/// Maximum number of concurrent in-flight requests against the unofficial
+/// endpoint. Higher values risk a soft IP ban; lower values are slow on
+/// large files. 4 matches the plan and the conventional "be polite" value
+/// for unofficial Google endpoints.
+const GTRANSLATE_CONCURRENCY: usize = 4;
+
 /// Unofficial Google translate endpoint. Best-effort, may break without notice.
-/// One HTTP request per text; concurrency-limited via FuturesOrdered.
+/// One HTTP request per text; bounded concurrency to avoid rate-limiting.
 pub struct GtranslateTranslator {
     client: Client,
 }
 
 impl GtranslateTranslator {
     pub fn new() -> Self {
+        // v3 differs: a browser-like User-Agent is required for the
+        // unofficial endpoint to respond. Revisit if Google hardens it.
         let client = Client::builder()
             .timeout(Duration::from_secs(20))
             .user_agent("Mozilla/5.0 (compatible; ftl2lang/0.1)")
@@ -44,23 +52,23 @@ impl Translator for GtranslateTranslator {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<Vec<String>, AppError> {
-        let mut futs: FuturesOrdered<_> = texts
-            .iter()
-            .map(|t| {
-                translate_one(
-                    &self.client,
-                    t.to_string(),
-                    source_lang.to_string(),
-                    target_lang.to_string(),
-                )
-            })
-            .collect();
+        // Materialise inputs as owned Strings so the per-future closure is
+        // free of borrowed references from `texts`; this keeps the higher-
+        // rank lifetimes that `buffered` requires happy.
+        let src = source_lang.to_string();
+        let tgt = target_lang.to_string();
+        let owned: Vec<String> = texts.iter().map(|t| t.to_string()).collect();
 
-        let mut out = Vec::with_capacity(texts.len());
-        while let Some(res) = futs.next().await {
-            out.push(res?);
-        }
-        Ok(out)
+        // `buffered(N)` runs at most N futures concurrently and preserves
+        // input order, so the returned Vec aligns with `texts`.
+        let results: Vec<Result<String, AppError>> = stream::iter(owned.into_iter().map(|text| {
+            translate_one(&self.client, text, src.clone(), tgt.clone())
+        }))
+        .buffered(GTRANSLATE_CONCURRENCY)
+        .collect()
+        .await;
+
+        results.into_iter().collect()
     }
 }
 
@@ -97,7 +105,12 @@ async fn translate_one(
     let segments = body
         .get(0)
         .and_then(|v| v.as_array())
-        .ok_or_else(|| AppError::Api("gtranslate: unexpected response shape".into()))?;
+        .ok_or_else(|| {
+            AppError::Api(format!(
+                "gtranslate: unexpected response shape; body={}",
+                body
+            ))
+        })?;
 
     let mut combined = String::new();
     for seg in segments {

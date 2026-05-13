@@ -1,5 +1,6 @@
 pub mod config;
 pub mod detect;
+pub mod diff;
 pub mod error;
 pub mod ftl;
 pub mod lang;

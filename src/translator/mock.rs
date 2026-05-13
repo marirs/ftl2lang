@@ -28,7 +28,7 @@ impl Translator for MockTranslator {
 
     async fn translate_batch(
         &self,
-        texts: &[String],
+        texts: &[&str],
         _source_lang: &str,
         _target_lang: &str,
     ) -> Result<Vec<String>, AppError> {

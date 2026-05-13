@@ -15,6 +15,12 @@ pub const DEEPL_SUPPORTED_LANGS: &[&str] = &[
     "ko", "lt", "lv", "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "zh",
 ];
 
+/// DeepL caps a single `/translate` request at 50 texts. Larger batches are
+/// chunked across multiple sequential requests; the trait contract that the
+/// returned `Vec` matches input length and order is preserved by concatenating
+/// chunk results in order.
+const DEEPL_MAX_TEXTS_PER_REQUEST: usize = 50;
+
 pub struct DeeplTranslator {
     client: Client,
     api_key: String,
@@ -35,6 +41,64 @@ impl DeeplTranslator {
             api_key,
             api_url: api_url.unwrap_or_else(|| "https://api-free.deepl.com/v2".into()),
         }
+    }
+
+    async fn translate_chunk(
+        &self,
+        texts: &[&str],
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<Vec<String>, AppError> {
+        let url = format!("{}/translate", self.api_url.trim_end_matches('/'));
+
+        // DeepL's form API accepts repeated `text` fields for batch requests.
+        // We do NOT set `tag_handling=xml`: the FTL walker has already
+        // stripped placeables, so DeepL only sees literal text. Activating
+        // the XML parser on plain text would mangle stray `<`, `>`, or `&`
+        // characters that appear naturally inside translation units.
+        let mut form: Vec<(&str, String)> = Vec::new();
+        for t in texts {
+            form.push(("text", (*t).to_string()));
+        }
+        form.push(("source_lang", source_lang.to_uppercase()));
+        form.push(("target_lang", target_lang.to_uppercase()));
+        form.push(("preserve_formatting", "1".into()));
+
+        // Retry up to 3 times with exponential back-off (1 s → 2 s) on
+        // transient network or 5xx errors. 4xx (auth, quota, oversize) fail
+        // immediately because `error_for_status` propagates them.
+        let mut delay_ms = 1000u64;
+        let mut last_err: Option<AppError> = None;
+        for attempt in 1..=3 {
+            let resp = self
+                .client
+                .post(&url)
+                .header("Authorization", format!("DeepL-Auth-Key {}", self.api_key))
+                .form(&form)
+                .send()
+                .await;
+
+            match resp.and_then(|r| r.error_for_status()) {
+                Ok(r) => {
+                    let parsed: DeeplResponse = r
+                        .json()
+                        .await
+                        .map_err(|e| AppError::Api(format!("deepl body: {}", e)))?;
+                    return Ok(parsed.translations.into_iter().map(|t| t.text).collect());
+                }
+                Err(e) if attempt < 3 => {
+                    last_err = Some(AppError::Api(format!("deepl request: {}", e)));
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                    delay_ms *= 2;
+                }
+                Err(e) => return Err(AppError::Api(format!("deepl request: {}", e))),
+            }
+        }
+        // Defensive: the `attempt < 3` arm above always sets `last_err`, and
+        // the `attempt == 3` arm returns directly; this is unreachable in
+        // practice but avoids `unreachable!()` so the invariant doesn't have
+        // to be visually verified against the loop bounds.
+        Err(last_err.unwrap_or_else(|| AppError::Api("deepl: retries exhausted".into())))
     }
 }
 
@@ -70,50 +134,11 @@ impl Translator for DeeplTranslator {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<Vec<String>, AppError> {
-        let url = format!("{}/translate", self.api_url.trim_end_matches('/'));
-
-        // DeepL's form API accepts repeated `text` fields for batch requests.
-        let mut form: Vec<(&str, String)> = Vec::new();
-        for t in texts {
-            form.push(("text", (*t).to_string()));
+        let mut out = Vec::with_capacity(texts.len());
+        for chunk in texts.chunks(DEEPL_MAX_TEXTS_PER_REQUEST) {
+            let translated = self.translate_chunk(chunk, source_lang, target_lang).await?;
+            out.extend(translated);
         }
-        form.push(("source_lang", source_lang.to_uppercase()));
-        form.push(("target_lang", target_lang.to_uppercase()));
-        // Preserve whitespace / line breaks inside translation units.
-        form.push(("preserve_formatting", "1".into()));
-        // Treat XML/HTML tags as opaque so FTL markup is not mangled.
-        form.push(("tag_handling", "xml".into()));
-
-        // Retry up to 3 times with exponential back-off (1 s → 2 s) on
-        // transient network or 5xx errors. 4xx (auth, quota) fail immediately
-        // on the third attempt path because `error_for_status` propagates them.
-        let mut delay_ms = 1000u64;
-        for attempt in 1..=3 {
-            let resp = self
-                .client
-                .post(&url)
-                .header("Authorization", format!("DeepL-Auth-Key {}", self.api_key))
-                .form(&form)
-                .send()
-                .await;
-
-            match resp.and_then(|r| r.error_for_status()) {
-                Ok(r) => {
-                    let parsed: DeeplResponse = r
-                        .json()
-                        .await
-                        .map_err(|e| AppError::Api(format!("deepl body: {}", e)))?;
-                    return Ok(parsed.translations.into_iter().map(|t| t.text).collect());
-                }
-                Err(e) if attempt < 3 => {
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                    delay_ms *= 2;
-                    // Discard the error; we will retry.
-                    let _ = e;
-                }
-                Err(e) => return Err(AppError::Api(format!("deepl request: {}", e))),
-            }
-        }
-        unreachable!()
+        Ok(out)
     }
 }

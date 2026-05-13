@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use async_trait::async_trait;
+use indicatif::ProgressBar;
 
 pub mod deepl;
 pub mod factory;
@@ -32,10 +33,21 @@ pub trait Translator: Send + Sync {
     /// input in the same order. The splice step relies on this length and
     /// order to map translations back to AST spans; an implementation that
     /// filters, reorders, or merges inputs will produce corrupted output.
+    ///
+    /// # Progress reporting
+    ///
+    /// If `progress` is `Some`, implementations should call `bar.inc(n)`
+    /// after completing each internal chunk or request so the user sees
+    /// movement on long translations. Granularity is implementation-defined
+    /// (gtranslate: one tick per text; DeepL/Google: one tick per chunk of
+    /// up to 50 / 100 texts) but the sum of all increments MUST equal
+    /// `texts.len()` on success. The bar is created and managed by the
+    /// caller; impls must not call `finish()` on it.
     async fn translate_batch(
         &self,
         texts: &[&str],
         source_lang: &str,
         target_lang: &str,
+        progress: Option<&ProgressBar>,
     ) -> Result<Vec<String>, AppError>;
 }

@@ -6,7 +6,7 @@ use ftl2lang::translator::mock::MockTranslator;
 async fn snapshot_simple() {
     let src = std::fs::read_to_string("tests/fixtures/simple.ftl").unwrap();
     let translator = MockTranslator::new();
-    let out = translate_file_content(&src, "en", "de", &translator, None).await.unwrap();
+    let out = translate_file_content(&src, "en", "de", &translator, None, None).await.unwrap();
     insta::assert_snapshot!("simple", out);
 }
 
@@ -14,7 +14,7 @@ async fn snapshot_simple() {
 async fn snapshot_with_placeables() {
     let src = std::fs::read_to_string("tests/fixtures/with_placeables.ftl").unwrap();
     let translator = MockTranslator::new();
-    let out = translate_file_content(&src, "en", "de", &translator, None).await.unwrap();
+    let out = translate_file_content(&src, "en", "de", &translator, None, None).await.unwrap();
     insta::assert_snapshot!("with_placeables", out);
 }
 
@@ -22,7 +22,7 @@ async fn snapshot_with_placeables() {
 async fn snapshot_with_selectors() {
     let src = std::fs::read_to_string("tests/fixtures/with_selectors.ftl").unwrap();
     let translator = MockTranslator::new();
-    let out = translate_file_content(&src, "en", "de", &translator, None).await.unwrap();
+    let out = translate_file_content(&src, "en", "de", &translator, None, None).await.unwrap();
     insta::assert_snapshot!("with_selectors", out);
 }
 
@@ -30,7 +30,7 @@ async fn snapshot_with_selectors() {
 async fn snapshot_with_attributes() {
     let src = std::fs::read_to_string("tests/fixtures/with_attributes.ftl").unwrap();
     let translator = MockTranslator::new();
-    let out = translate_file_content(&src, "en", "de", &translator, None).await.unwrap();
+    let out = translate_file_content(&src, "en", "de", &translator, None, None).await.unwrap();
     insta::assert_snapshot!("with_attributes", out);
 }
 
@@ -47,6 +47,7 @@ async fn first_run_translates_all_messages() {
         &translator,
         false,
         false,
+        None,
     )
     .await
     .unwrap();
@@ -90,6 +91,7 @@ async fn unchanged_messages_in_target_are_preserved() {
         &translator,
         false,
         false,
+        None,
     )
     .await
     .unwrap();
@@ -122,6 +124,7 @@ async fn changed_source_triggers_retranslation() {
         &translator,
         false,
         false,
+        None,
     )
     .await
     .unwrap();
@@ -153,6 +156,7 @@ async fn force_retranslates_everything() {
         &translator,
         true,
         false,
+        None,
     )
     .await
     .unwrap();
@@ -176,6 +180,7 @@ async fn orphaned_messages_are_preserved_by_default() {
         &translator,
         false,
         false, // prune = false
+        None,
     )
     .await
     .unwrap();
@@ -202,6 +207,7 @@ async fn prune_removes_orphans() {
         &translator,
         false,
         true, // prune = true
+        None,
     )
     .await
     .unwrap();

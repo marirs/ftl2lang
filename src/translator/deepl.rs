@@ -1,6 +1,7 @@
 use super::Translator;
 use crate::error::AppError;
 use async_trait::async_trait;
+use indicatif::ProgressBar;
 use reqwest::Client;
 use serde::Deserialize;
 use std::time::Duration;
@@ -133,11 +134,15 @@ impl Translator for DeeplTranslator {
         texts: &[&str],
         source_lang: &str,
         target_lang: &str,
+        progress: Option<&ProgressBar>,
     ) -> Result<Vec<String>, AppError> {
         let mut out = Vec::with_capacity(texts.len());
         for chunk in texts.chunks(DEEPL_MAX_TEXTS_PER_REQUEST) {
             let translated = self.translate_chunk(chunk, source_lang, target_lang).await?;
             out.extend(translated);
+            if let Some(bar) = progress {
+                bar.inc(chunk.len() as u64);
+            }
         }
         Ok(out)
     }

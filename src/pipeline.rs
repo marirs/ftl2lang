@@ -4,6 +4,7 @@ use crate::ftl::splice::splice_translations;
 use crate::ftl::walk::{walk_source, TranslatableSpan};
 use crate::sidecar::{hash_text, Sidecar, SidecarEntry};
 use crate::translator::Translator;
+use indicatif::ProgressBar;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -18,6 +19,7 @@ pub async fn translate_file_content<T: Translator + ?Sized>(
     target_lang: &str,
     translator: &T,
     path: Option<&Path>,
+    progress: Option<&ProgressBar>,
 ) -> Result<String, AppError> {
     let spans = walk_source(src, path)?;
     if spans.is_empty() {
@@ -29,7 +31,9 @@ pub async fn translate_file_content<T: Translator + ?Sized>(
         return Ok(src.to_string());
     }
     let texts: Vec<&str> = spans.iter().map(|s| s.text.as_str()).collect();
-    let translations = translator.translate_batch(&texts, source_lang, target_lang).await?;
+    let translations = translator
+        .translate_batch(&texts, source_lang, target_lang, progress)
+        .await?;
     splice_translations(src, &spans, &translations, path)
 }
 
@@ -62,6 +66,7 @@ pub async fn translate_file_incremental<T: Translator + ?Sized>(
     translator: &T,
     force: bool,
     prune: bool,
+    progress: Option<&ProgressBar>,
 ) -> Result<(String, Summary, Sidecar), AppError> {
     let source_spans = walk_source(src, None)?;
 
@@ -99,8 +104,13 @@ pub async fn translate_file_incremental<T: Translator + ?Sized>(
         Vec::new()
     } else {
         let texts: Vec<&str> = spans_to_translate.iter().map(|s| s.text.as_str()).collect();
+        // Tell the bar the real count now that we know it; Unchanged spans
+        // are not retranslated and would otherwise leave the bar short.
+        if let Some(bar) = progress {
+            bar.set_length(texts.len() as u64);
+        }
         translator
-            .translate_batch(&texts, source_lang, target_lang)
+            .translate_batch(&texts, source_lang, target_lang, progress)
             .await?
     };
 

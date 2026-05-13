@@ -4,7 +4,7 @@ use ftl2lang::translator::Translator;
 #[tokio::test]
 async fn mock_uppercases_inputs() {
     let m = MockTranslator::new();
-    let out = m.translate_batch(&["hello", "world"], "en", "de").await.unwrap();
+    let out = m.translate_batch(&["hello", "world"], "en", "de", None).await.unwrap();
     assert_eq!(out, vec!["HELLO".to_string(), "WORLD".to_string()]);
 }
 

@@ -2,6 +2,7 @@ use super::Translator;
 use crate::error::AppError;
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
+use indicatif::ProgressBar;
 use reqwest::Client;
 use std::time::Duration;
 
@@ -51,6 +52,7 @@ impl Translator for GtranslateTranslator {
         texts: &[&str],
         source_lang: &str,
         target_lang: &str,
+        progress: Option<&ProgressBar>,
     ) -> Result<Vec<String>, AppError> {
         // Materialise inputs as owned Strings so the per-future closure is
         // free of borrowed references from `texts`; this keeps the higher-
@@ -60,15 +62,21 @@ impl Translator for GtranslateTranslator {
         let owned: Vec<String> = texts.iter().map(|t| t.to_string()).collect();
 
         // `buffered(N)` runs at most N futures concurrently and preserves
-        // input order, so the returned Vec aligns with `texts`.
-        let results: Vec<Result<String, AppError>> = stream::iter(owned.into_iter().map(|text| {
+        // input order, so the returned Vec aligns with `texts`. We drain it
+        // with a while-loop so the progress bar can tick after each yield.
+        let mut stream = stream::iter(owned.into_iter().map(|text| {
             translate_one(&self.client, text, src.clone(), tgt.clone())
         }))
-        .buffered(GTRANSLATE_CONCURRENCY)
-        .collect()
-        .await;
+        .buffered(GTRANSLATE_CONCURRENCY);
 
-        results.into_iter().collect()
+        let mut out = Vec::with_capacity(texts.len());
+        while let Some(res) = stream.next().await {
+            out.push(res?);
+            if let Some(bar) = progress {
+                bar.inc(1);
+            }
+        }
+        Ok(out)
     }
 }
 

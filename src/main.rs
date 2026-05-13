@@ -13,7 +13,27 @@ use ftl2lang::pipeline::{translate_file_incremental, Summary};
 use ftl2lang::sidecar::{sidecar_path_for, Sidecar};
 use ftl2lang::translator::factory::build_translator;
 use ftl2lang::translator::Translator;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+/// indicatif template: shown when we know the total span count.
+const PROGRESS_TEMPLATE: &str =
+    "  {bar:30.cyan/blue} {pos}/{len} {msg}";
+
+fn make_bar(total: u64, label: &str) -> ProgressBar {
+    let bar = ProgressBar::new(total);
+    bar.set_style(
+        ProgressStyle::with_template(PROGRESS_TEMPLATE)
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
+            .progress_chars("=> "),
+    );
+    bar.set_message(label.to_string());
+    // Keep the bar quiet (no inadvertent redraws) when stderr isn't a TTY;
+    // indicatif handles that automatically, but throttle redraws too.
+    bar.enable_steady_tick(Duration::from_millis(100));
+    bar
+}
 
 #[tokio::main]
 async fn main() {
@@ -142,7 +162,13 @@ async fn process_file(
         source_lang.clone(),
     );
 
-    let (out, summary, new_sidecar) = translate_file_incremental(
+    // Build a progress bar with an upper-bound total (every span in the
+    // source); the pipeline will narrow `set_length` to the actual count of
+    // new/changed spans once it has classified them.
+    let initial_total = walk_source(&src, Some(input.as_path()))?.len() as u64;
+    let bar = make_bar(initial_total, &format!("via {}", translator.name()));
+
+    let result = translate_file_incremental(
         &src,
         prev_target.as_deref(),
         &prev_sidecar,
@@ -151,8 +177,11 @@ async fn process_file(
         &cached,
         args.force,
         args.prune,
+        Some(&bar),
     )
-    .await?;
+    .await;
+    bar.finish_and_clear();
+    let (out, summary, new_sidecar) = result?;
 
     std::fs::write(&out_path, out)?;
     new_sidecar.save(&sidecar_path)?;
@@ -224,6 +253,12 @@ async fn process_folder(
     let mut total = Summary::default();
     let mut errors: Vec<(PathBuf, AppError)> = Vec::new();
 
+    // MultiProgress: outer bar tracks files processed, inner bar tracks
+    // spans within the current file. Both are managed by indicatif so
+    // their redraws don't fight each other.
+    let multi = MultiProgress::new();
+    let outer = multi.add(make_bar(files.len() as u64, "files"));
+
     for file in &files {
         let out_path = target_path_for(file, source_root, &target_root);
         if let Some(parent) = out_path.parent() {
@@ -234,6 +269,12 @@ async fn process_folder(
         let prev_target = std::fs::read_to_string(&out_path).ok();
         let prev_sidecar = Sidecar::load(&sidecar_path)?;
 
+        let initial_total = walk_source(&src, Some(file.as_path()))?.len() as u64;
+        let inner = multi.add(make_bar(
+            initial_total,
+            &format!("{}", file.display()),
+        ));
+
         match translate_file_incremental(
             &src,
             prev_target.as_deref(),
@@ -243,6 +284,7 @@ async fn process_folder(
             &cached,
             args.force,
             args.prune,
+            Some(&inner),
         )
         .await
         {
@@ -267,7 +309,10 @@ async fn process_folder(
                 errors.push((file.clone(), e));
             }
         }
+        inner.finish_and_clear();
+        outer.inc(1);
     }
+    outer.finish_and_clear();
 
     // Release the cache borrow held by `cached` before saving.
     drop(cached);
@@ -386,22 +431,35 @@ impl<'a> Translator for CachingTranslator<'a> {
         texts: &[&str],
         source_lang: &str,
         target_lang: &str,
+        progress: Option<&indicatif::ProgressBar>,
     ) -> Result<Vec<String>, AppError> {
         if !self.enabled {
-            return self.inner.translate_batch(texts, source_lang, target_lang).await;
+            return self
+                .inner
+                .translate_batch(texts, source_lang, target_lang, progress)
+                .await;
         }
 
         // Determine which texts are cache misses.
         let mut results: Vec<Option<String>> = vec![None; texts.len()];
         let mut to_fetch: Vec<(usize, String)> = Vec::new();
+        let mut hit_count = 0u64;
         {
             let cache = self.cache.lock().unwrap();
             for (i, text) in texts.iter().enumerate() {
                 if let Some(hit) = cache.get(text, &self.source_lang, &self.target_lang, self.inner.name()) {
                     results[i] = Some(hit);
+                    hit_count += 1;
                 } else {
                     to_fetch.push((i, (*text).to_string()));
                 }
+            }
+        }
+        // Cache hits resolve instantly; tick the bar for them up-front so
+        // the progress reflects real work done, not just remote work.
+        if let Some(bar) = progress {
+            if hit_count > 0 {
+                bar.inc(hit_count);
             }
         }
 
@@ -409,7 +467,7 @@ impl<'a> Translator for CachingTranslator<'a> {
             let fetch_texts: Vec<&str> = to_fetch.iter().map(|(_, t)| t.as_str()).collect();
             let translated = self
                 .inner
-                .translate_batch(&fetch_texts, source_lang, target_lang)
+                .translate_batch(&fetch_texts, source_lang, target_lang, progress)
                 .await?;
             let mut cache = self.cache.lock().unwrap();
             for ((idx, text), tr) in to_fetch.iter().zip(translated.iter()) {

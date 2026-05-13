@@ -1,10 +1,14 @@
-/// Normalise a BCP-47-ish language tag:
+/// Normalise a BCP-47-ish language tag for the two-component shapes this CLI
+/// actually accepts ("de", "pt-BR"):
 /// - strips surrounding whitespace
-/// - lowercases the primary subtag (e.g. "DE" → "de")
-/// - uppercases the region subtag when present (e.g. "pt-br" → "pt-BR")
+/// - lowercases the primary subtag
+/// - uppercases everything after the first `-` (treating it as a region)
 ///
-/// Only the first `-` separator is treated as the lang/region boundary; further
-/// subtags (script, variant, …) are left untouched for now.
+/// Inputs with script or variant subtags (e.g. "zh-Hant", "en-US-POSIX") have
+/// every component after the first hyphen uppercased — which is wrong for
+/// scripts. This is acceptable here because none of the translation backends
+/// nor `whatlang` produce such tags, but if that changes, this helper needs
+/// real BCP-47 parsing (e.g. via the `oxilangtag` crate).
 pub fn normalize(code: &str) -> String {
     let trimmed = code.trim();
     if let Some((lang, region)) = trimmed.split_once('-') {

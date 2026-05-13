@@ -30,12 +30,14 @@ pub enum AppError {
 }
 
 pub fn exit_code(err: &AppError) -> i32 {
+    // Exit code 2 is reserved for argument-parsing errors (clap's convention,
+    // matching POSIX "misuse of shell builtins"). Configuration errors (missing
+    // API keys, invalid config TOML) get code 6.
     match err {
-        AppError::MissingApiKey { .. } => 2,
         AppError::FtlParse { .. } => 3,
         AppError::UnsupportedLang { .. } => 4,
         AppError::Api(_) => 5,
-        AppError::Config(_) => 6,
+        AppError::Config(_) | AppError::MissingApiKey { .. } => 6,
         AppError::Io(_) => 7,
         AppError::Other(_) => 1,
     }

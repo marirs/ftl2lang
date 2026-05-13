@@ -1,4 +1,6 @@
 .*
+docs/
+data/
 !.github
 !.gitignore
 target/

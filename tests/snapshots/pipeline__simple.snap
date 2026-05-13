@@ -1,0 +1,6 @@
+---
+source: tests/pipeline.rs
+expression: out
+---
+hello = HELLO, WORLD!
+goodbye = GOODBYE.

@@ -1,0 +1,9 @@
+---
+source: tests/pipeline.rs
+expression: out
+---
+new-messages =
+    YOU HAVE { $count ->
+        [one] ONE NEW MESSAGE
+       *[other] { $count } NEW MESSAGES
+    }.

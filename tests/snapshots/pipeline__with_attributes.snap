@@ -1,0 +1,7 @@
+---
+source: tests/pipeline.rs
+expression: out
+---
+login-button = LOG IN
+    .title = CLICK TO LOG IN
+    .aria-label = LOG IN TO YOUR ACCOUNT

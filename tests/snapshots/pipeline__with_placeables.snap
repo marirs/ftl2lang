@@ -1,0 +1,6 @@
+---
+source: tests/pipeline.rs
+expression: out
+---
+welcome = HELLO, { $name }! YOU HAVE NEW MAIL.
+brand = WELCOME TO { -brand-name }.

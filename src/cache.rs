@@ -4,6 +4,15 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// On-disk translation cache keyed by `sha256(text|src|tgt|backend)`.
+///
+/// v3 note: there is no automatic invalidation. If a backend silently
+/// changes its output (model upgrade, glossary change, normalization
+/// tweak), stale entries are returned forever. The user can work around
+/// this by passing `--force` (which bypasses the cache via the pipeline)
+/// or by deleting the cache file. A future `--clear-cache` flag or a
+/// `version: u32` field on `CacheEntry` would let us invalidate
+/// automatically.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TranslationCache {
     pub entries: BTreeMap<String, CacheEntry>,
@@ -16,6 +25,8 @@ pub struct CacheEntry {
     pub tgt: String,
     pub backend: String,
     pub translation: String,
+    /// Reserved for future TTL / staleness logic. Currently write-only;
+    /// no code path reads it at runtime.
     pub cached_at: String,
 }
 

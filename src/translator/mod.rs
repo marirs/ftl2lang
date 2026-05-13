@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use async_trait::async_trait;
 
+pub mod gtranslate;
 pub mod mock;
 
 /// A translation backend (DeepL, Google Cloud, gtranslate, ...).

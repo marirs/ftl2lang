@@ -66,13 +66,19 @@ pub struct Args {
     /// of each, and exit. Does not require --to or <INPUT>.
     #[arg(long)]
     pub list_translators: bool,
+
+    /// Interactively create or update ~/.config/ftl2lang/config.toml.
+    /// Asks per-backend for API keys (no echo), writes a TOML file with
+    /// mode 0600. Does not require --to or <INPUT>.
+    #[arg(long)]
+    pub create_config: bool,
 }
 
 impl Args {
     /// Whether the invocation is a "list-and-exit" query rather than a
     /// translation run. List runs do not need --to or <INPUT>.
     pub fn is_list_query(&self) -> bool {
-        self.list_langs || self.list_translators
+        self.list_langs || self.list_translators || self.create_config
     }
 
     /// Validate the combination of flags. Translation runs require both

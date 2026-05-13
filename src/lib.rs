@@ -9,5 +9,6 @@ pub mod ftl;
 pub mod info;
 pub mod lang;
 pub mod pipeline;
+pub mod setup;
 pub mod sidecar;
 pub mod translator;

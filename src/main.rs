@@ -36,6 +36,11 @@ async fn run() -> Result<(), AppError> {
         print!("{}", render_languages());
         return Ok(());
     }
+    if args.create_config {
+        let config_path = args.config.clone().unwrap_or_else(Config::default_path);
+        ftl2lang::setup::run_interactive_setup(&config_path).await?;
+        return Ok(());
+    }
 
     // Translation runs require both --to and <INPUT>.
     args.validate().map_err(AppError::Other)?;

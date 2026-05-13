@@ -13,6 +13,8 @@ pub struct Sidecar {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SidecarEntry {
     pub src_hash: String,
+    /// RFC3339 timestamp string. v3 note: stored as String for simplicity; if
+    /// ordering or filtering by date is ever needed, switch to chrono::DateTime.
     pub translated_at: String,
     pub backend: String,
 }
@@ -27,9 +29,16 @@ impl Sidecar {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), AppError> {
-        if let Some(parent) = path.parent() {
+        // path.parent() returns Some("") for a bare filename — that would
+        // make create_dir_all a silent no-op. Filter it out so we only
+        // try to create a real directory.
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
         }
+        // v3 note: non-atomic write. A crash mid-write would corrupt the
+        // sidecar; the diff classifier in Task 14 treats a corrupt or
+        // absent sidecar as "needs re-translation", so the worst-case is
+        // extra API calls, not lost translations. Acceptable for now.
         std::fs::write(path, self.to_json()?)?;
         Ok(())
     }

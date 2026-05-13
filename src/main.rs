@@ -7,6 +7,7 @@ use ftl2lang::detect::detect_source_language;
 use ftl2lang::error::{exit_code, AppError};
 use ftl2lang::folder::{collect_ftl_files, target_path_for};
 use ftl2lang::ftl::walk::walk_source;
+use ftl2lang::info::{render_languages, render_translators};
 use ftl2lang::lang::{display_name, normalize};
 use ftl2lang::pipeline::{translate_file_incremental, Summary};
 use ftl2lang::sidecar::{sidecar_path_for, Sidecar};
@@ -24,7 +25,22 @@ async fn main() {
 
 async fn run() -> Result<(), AppError> {
     let args = Args::parse();
-    let target_lang = normalize(&args.to);
+
+    // Query subcommands run before any config / network work. They never
+    // need --to or <INPUT>.
+    if args.list_translators {
+        print!("{}", render_translators());
+        return Ok(());
+    }
+    if args.list_langs {
+        print!("{}", render_languages());
+        return Ok(());
+    }
+
+    // Translation runs require both --to and <INPUT>.
+    args.validate().map_err(AppError::Other)?;
+    let target_lang = normalize(args.to.as_deref().expect("validated above"));
+    let input = args.input.as_ref().expect("validated above");
 
     // Load config
     let config_path = args.config.clone().unwrap_or_else(Config::default_path);
@@ -43,7 +59,7 @@ async fn run() -> Result<(), AppError> {
         });
     }
 
-    if args.input.is_dir() {
+    if input.is_dir() {
         process_folder(&args, &target_lang, &config, translator.as_ref()).await
     } else {
         process_file(&args, &target_lang, &config, translator.as_ref()).await
@@ -77,12 +93,13 @@ async fn process_file(
     config: &Config,
     translator: &dyn Translator,
 ) -> Result<(), AppError> {
-    let src = std::fs::read_to_string(&args.input)?;
+    let input = args.input.as_ref().expect("validated by run()");
+    let src = std::fs::read_to_string(input)?;
     let source_lang = resolve_source_lang(args, &src, config.default_source.as_deref())?;
 
     // Default output path: sibling file named <target>.ftl
     let out_path = args.out.clone().unwrap_or_else(|| {
-        args.input
+        input
             .parent()
             .unwrap_or_else(|| Path::new("."))
             .join(format!("{}.ftl", target_lang))
@@ -93,11 +110,11 @@ async fn process_file(
     let prev_sidecar = Sidecar::load(&sidecar_path)?;
 
     if args.dry_run {
-        let spans = walk_source(&src, Some(args.input.as_path()))?;
+        let spans = walk_source(&src, Some(input.as_path()))?;
         println!(
             "DRY-RUN: would translate {} text spans in {} via {}",
             spans.len(),
-            args.input.display(),
+            input.display(),
             translator.name()
         );
         return Ok(());
@@ -148,7 +165,7 @@ async fn process_folder(
     config: &Config,
     translator: &dyn Translator,
 ) -> Result<(), AppError> {
-    let source_root = &args.input;
+    let source_root: &Path = args.input.as_deref().expect("validated by run()");
     let target_root = args.out.clone().unwrap_or_else(|| {
         source_root
             .parent()

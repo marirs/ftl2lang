@@ -8,12 +8,14 @@ use std::path::PathBuf;
     about = "Translate Fluent (.ftl) localization files between languages"
 )]
 pub struct Args {
-    /// Path to .ftl file or folder of .ftl files.
-    pub input: PathBuf,
+    /// Path to .ftl file or folder of .ftl files. Required for translation
+    /// runs; omit when using --list-langs or --list-translators.
+    pub input: Option<PathBuf>,
 
-    /// Target language code (e.g. de, fr, ta).
+    /// Target language code (e.g. de, fr, ta). Required for translation
+    /// runs; omit when using --list-langs or --list-translators.
     #[arg(long)]
-    pub to: String,
+    pub to: Option<String>,
 
     /// Source language code. If omitted, auto-detect with Y/n confirmation.
     #[arg(long)]
@@ -54,4 +56,37 @@ pub struct Args {
     /// Override config file path.
     #[arg(long)]
     pub config: Option<PathBuf>,
+
+    /// List the languages supported by each translator backend and exit.
+    /// Does not require --to or <INPUT>.
+    #[arg(long)]
+    pub list_langs: bool,
+
+    /// List the available translator backends with a one-line description
+    /// of each, and exit. Does not require --to or <INPUT>.
+    #[arg(long)]
+    pub list_translators: bool,
+}
+
+impl Args {
+    /// Whether the invocation is a "list-and-exit" query rather than a
+    /// translation run. List runs do not need --to or <INPUT>.
+    pub fn is_list_query(&self) -> bool {
+        self.list_langs || self.list_translators
+    }
+
+    /// Validate the combination of flags. Translation runs require both
+    /// `<INPUT>` and `--to`; list queries do not.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.is_list_query() {
+            return Ok(());
+        }
+        if self.input.is_none() {
+            return Err("missing <INPUT>: required for translation runs".into());
+        }
+        if self.to.is_none() {
+            return Err("missing --to: required for translation runs".into());
+        }
+        Ok(())
+    }
 }

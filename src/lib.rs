@@ -6,6 +6,7 @@ pub mod diff;
 pub mod error;
 pub mod folder;
 pub mod ftl;
+pub mod info;
 pub mod lang;
 pub mod pipeline;
 pub mod sidecar;

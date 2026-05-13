@@ -29,6 +29,7 @@ async fn run() -> Result<(), AppError> {
     // Load config
     let config_path = args.config.clone().unwrap_or_else(Config::default_path);
     let config = Config::load_from_path(&config_path)?;
+    warn_if_config_world_readable(&config_path);
 
     // Build translator
     let translator = build_translator(args.translator.as_deref(), &config)?;
@@ -43,19 +44,41 @@ async fn run() -> Result<(), AppError> {
     }
 
     if args.input.is_dir() {
-        process_folder(&args, &target_lang, translator.as_ref()).await
+        process_folder(&args, &target_lang, &config, translator.as_ref()).await
     } else {
-        process_file(&args, &target_lang, translator.as_ref()).await
+        process_file(&args, &target_lang, &config, translator.as_ref()).await
     }
+}
+
+#[cfg(unix)]
+fn warn_if_config_world_readable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(meta) = std::fs::metadata(path) {
+        let mode = meta.permissions().mode();
+        // Any bit set for group or other (0o077) means non-owner can read.
+        if mode & 0o077 != 0 {
+            eprintln!(
+                "warning: {} is group/world readable (mode {:o}); chmod 600 to protect API keys",
+                path.display(),
+                mode & 0o777
+            );
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn warn_if_config_world_readable(_path: &Path) {
+    // No equivalent permission concept on non-Unix targets.
 }
 
 async fn process_file(
     args: &Args,
     target_lang: &str,
+    config: &Config,
     translator: &dyn Translator,
 ) -> Result<(), AppError> {
     let src = std::fs::read_to_string(&args.input)?;
-    let source_lang = resolve_source_lang(args, &src)?;
+    let source_lang = resolve_source_lang(args, &src, config.default_source.as_deref())?;
 
     // Default output path: sibling file named <target>.ftl
     let out_path = args.out.clone().unwrap_or_else(|| {
@@ -105,6 +128,7 @@ async fn process_file(
         target_lang,
         &cached,
         args.force,
+        args.prune,
     )
     .await?;
 
@@ -121,6 +145,7 @@ async fn process_file(
 async fn process_folder(
     args: &Args,
     target_lang: &str,
+    config: &Config,
     translator: &dyn Translator,
 ) -> Result<(), AppError> {
     let source_root = &args.input;
@@ -137,9 +162,42 @@ async fn process_folder(
         return Ok(());
     }
 
+    if args.dry_run {
+        let mut total_spans = 0usize;
+        for file in &files {
+            let src = std::fs::read_to_string(file)?;
+            let spans = walk_source(&src, Some(file.as_path()))?;
+            total_spans += spans.len();
+            println!("DRY-RUN: {} ({} spans)", file.display(), spans.len());
+        }
+        println!(
+            "DRY-RUN: would translate {} spans across {} files via {}",
+            total_spans,
+            files.len(),
+            translator.name()
+        );
+        return Ok(());
+    }
+
     // Resolve source lang once from the first file's content (or --from).
     let first_src = std::fs::read_to_string(&files[0])?;
-    let source_lang = resolve_source_lang(args, &first_src)?;
+    let source_lang = resolve_source_lang(args, &first_src, config.default_source.as_deref())?;
+
+    // Set up optional cache for folder mode too — biggest win when
+    // multiple files share strings.
+    let cache_path = TranslationCache::default_path();
+    let mut cache = if args.cache {
+        TranslationCache::load(&cache_path)?
+    } else {
+        TranslationCache::default()
+    };
+    let cached = CachingTranslator::new(
+        translator,
+        &mut cache,
+        args.cache,
+        target_lang.to_string(),
+        source_lang.clone(),
+    );
 
     let mut total = Summary::default();
     let mut errors: Vec<(PathBuf, AppError)> = Vec::new();
@@ -160,8 +218,9 @@ async fn process_folder(
             &prev_sidecar,
             &source_lang,
             target_lang,
-            translator,
+            &cached,
             args.force,
+            args.prune,
         )
         .await
         {
@@ -186,6 +245,12 @@ async fn process_folder(
                 errors.push((file.clone(), e));
             }
         }
+    }
+
+    // Release the cache borrow held by `cached` before saving.
+    drop(cached);
+    if args.cache {
+        cache.save(&cache_path)?;
     }
 
     println!(
@@ -215,9 +280,19 @@ fn print_summary(out_path: &Path, summary: &Summary) {
     );
 }
 
-fn resolve_source_lang(args: &Args, src: &str) -> Result<String, AppError> {
+fn resolve_source_lang(
+    args: &Args,
+    src: &str,
+    config_default: Option<&str>,
+) -> Result<String, AppError> {
+    // --from has the highest priority. Then config's default_source. Only fall
+    // back to whatlang detection (which then asks the user to confirm) if
+    // neither is set.
     if let Some(from) = &args.from {
         return Ok(normalize(from));
+    }
+    if let Some(default) = config_default {
+        return Ok(normalize(default));
     }
 
     // Extract sample text from the source for detection.

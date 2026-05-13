@@ -38,10 +38,18 @@ async fn snapshot_with_attributes() {
 async fn first_run_translates_all_messages() {
     let src = "a = Hello\nb = World\n";
     let translator = MockTranslator::new();
-    let (out, summary, sidecar) =
-        translate_file_incremental(src, None, &Sidecar::default(), "en", "de", &translator, false)
-            .await
-            .unwrap();
+    let (out, summary, sidecar) = translate_file_incremental(
+        src,
+        None,
+        &Sidecar::default(),
+        "en",
+        "de",
+        &translator,
+        false,
+        false,
+    )
+    .await
+    .unwrap();
     assert!(out.contains("a = HELLO"));
     assert!(out.contains("b = WORLD"));
     assert_eq!(summary.new, 2);
@@ -81,6 +89,7 @@ async fn unchanged_messages_in_target_are_preserved() {
         "de",
         &translator,
         false,
+        false,
     )
     .await
     .unwrap();
@@ -104,10 +113,18 @@ async fn changed_source_triggers_retranslation() {
         },
     );
     let translator = MockTranslator::new();
-    let (out, summary, _sc) =
-        translate_file_incremental(src, Some(prev_target), &prev_sc, "en", "de", &translator, false)
-            .await
-            .unwrap();
+    let (out, summary, _sc) = translate_file_incremental(
+        src,
+        Some(prev_target),
+        &prev_sc,
+        "en",
+        "de",
+        &translator,
+        false,
+        false,
+    )
+    .await
+    .unwrap();
     assert!(out.contains("a = HI"));
     assert_eq!(summary.changed, 1);
     assert_eq!(summary.unchanged, 0);
@@ -127,10 +144,68 @@ async fn force_retranslates_everything() {
         },
     );
     let translator = MockTranslator::new();
-    let (out, summary, _sc) =
-        translate_file_incremental(src, Some(prev_target), &prev_sc, "en", "de", &translator, true)
-            .await
-            .unwrap();
+    let (out, summary, _sc) = translate_file_incremental(
+        src,
+        Some(prev_target),
+        &prev_sc,
+        "en",
+        "de",
+        &translator,
+        true,
+        false,
+    )
+    .await
+    .unwrap();
     assert!(out.contains("a = HELLO"));
     assert_eq!(summary.new + summary.changed, 1);
+}
+
+#[tokio::test]
+async fn orphaned_messages_are_preserved_by_default() {
+    // Source no longer contains the "old" key, but the previous target file
+    // does. Without --prune, the orphan must be carried forward.
+    let src = "a = Hello\n";
+    let prev_target = "a = Hallo\nold = Alt\n";
+    let translator = MockTranslator::new();
+    let (out, summary, _sc) = translate_file_incremental(
+        src,
+        Some(prev_target),
+        &Sidecar::default(),
+        "en",
+        "de",
+        &translator,
+        false,
+        false, // prune = false
+    )
+    .await
+    .unwrap();
+    assert_eq!(summary.orphaned, 1);
+    assert!(
+        out.contains("old = Alt"),
+        "orphan preserved; got: {}",
+        out
+    );
+    assert!(out.contains("# --- Orphaned (no longer in source) ---"));
+}
+
+#[tokio::test]
+async fn prune_removes_orphans() {
+    let src = "a = Hello\n";
+    let prev_target = "a = Hallo\nold = Alt\n";
+    let translator = MockTranslator::new();
+    let (out, summary, _sc) = translate_file_incremental(
+        src,
+        Some(prev_target),
+        &Sidecar::default(),
+        "en",
+        "de",
+        &translator,
+        false,
+        true, // prune = true
+    )
+    .await
+    .unwrap();
+    assert_eq!(summary.orphaned, 1);
+    assert!(!out.contains("old"), "orphan removed; got: {}", out);
+    assert!(!out.contains("# --- Orphaned"));
 }

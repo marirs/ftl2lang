@@ -48,6 +48,11 @@ pub struct Summary {
 ///
 /// When `force` is true, every message is treated as NEW and the side-car
 /// from a previous run is ignored.
+///
+/// When `prune` is false, orphaned messages (present in `prev_target` but no
+/// longer in `src`) are appended to the output under a separator comment so
+/// human edits are not silently lost. When `prune` is true, those messages
+/// are dropped.
 pub async fn translate_file_incremental<T: Translator + ?Sized>(
     src: &str,
     prev_target: Option<&str>,
@@ -56,6 +61,7 @@ pub async fn translate_file_incremental<T: Translator + ?Sized>(
     target_lang: &str,
     translator: &T,
     force: bool,
+    prune: bool,
 ) -> Result<(String, Summary, Sidecar), AppError> {
     let source_spans = walk_source(src, None)?;
 
@@ -134,7 +140,7 @@ pub async fn translate_file_incremental<T: Translator + ?Sized>(
         })
         .collect();
 
-    let merged = splice_translations(src, &source_spans, &final_translations, None)?;
+    let mut merged = splice_translations(src, &source_spans, &final_translations, None)?;
 
     // Compute summary counts per message (verdicts are per-message, not per-span).
     let mut summary = Summary::default();
@@ -144,6 +150,27 @@ pub async fn translate_file_incremental<T: Translator + ?Sized>(
             Verdict::Changed => summary.changed += 1,
             Verdict::Unchanged => summary.unchanged += 1,
             Verdict::Orphaned => summary.orphaned += 1,
+        }
+    }
+
+    // Preserve orphaned messages from prev_target unless --prune was passed.
+    // Without this, human-edited translations of removed source IDs would
+    // disappear silently the first time the source is regenerated.
+    if !prune && summary.orphaned > 0 {
+        if let Some(prev) = prev_target {
+            let orphaned_ids: std::collections::BTreeSet<&str> = verdicts
+                .iter()
+                .filter(|(_, v)| matches!(v, Verdict::Orphaned))
+                .map(|(id, _)| id.as_str())
+                .collect();
+            let orphan_block = serialize_orphans(prev, &orphaned_ids)?;
+            if !orphan_block.is_empty() {
+                if !merged.ends_with('\n') {
+                    merged.push('\n');
+                }
+                merged.push_str("\n# --- Orphaned (no longer in source) ---\n");
+                merged.push_str(&orphan_block);
+            }
         }
     }
 
@@ -186,6 +213,43 @@ fn group_spans_by_id(spans: &[TranslatableSpan]) -> BTreeMap<String, String> {
         entry.push_str(&s.text);
     }
     out
+}
+
+/// Re-parse `prev_target` and serialize only the entries whose ID is in
+/// `orphaned_ids`, returning the resulting FTL text (possibly empty if no
+/// IDs matched).
+fn serialize_orphans(
+    prev_target: &str,
+    orphaned_ids: &std::collections::BTreeSet<&str>,
+) -> Result<String, AppError> {
+    use fluent_syntax::ast;
+    use fluent_syntax::parser;
+    use fluent_syntax::serializer;
+    use std::path::PathBuf;
+
+    let resource = parser::parse(prev_target).map_err(|(_, errs)| AppError::FtlParse {
+        path: PathBuf::from("<prev_target>"),
+        message: format!("{} error(s); first: {:?}", errs.len(), errs.first()),
+    })?;
+
+    let body: Vec<ast::Entry<&str>> = resource
+        .body
+        .into_iter()
+        .filter(|entry| match entry {
+            ast::Entry::Message(m) => orphaned_ids.contains(m.id.name),
+            ast::Entry::Term(t) => {
+                let name = format!("-{}", t.id.name);
+                orphaned_ids.contains(name.as_str())
+            }
+            _ => false,
+        })
+        .collect();
+
+    if body.is_empty() {
+        return Ok(String::new());
+    }
+    let filtered = ast::Resource { body };
+    Ok(serializer::serialize(&filtered))
 }
 
 fn clone_sidecar(prev: &Sidecar) -> Sidecar {

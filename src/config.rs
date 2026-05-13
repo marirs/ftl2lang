@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub default_translator: Option<String>,
     pub default_source: Option<String>,
@@ -12,12 +13,14 @@ pub struct Config {
 }
 
 #[derive(Debug, Default, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct DeeplConfig {
     pub api_key: Option<String>,
     pub api_url: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct GoogleConfig {
     pub api_key: Option<String>,
     pub project_id: Option<String>,
@@ -25,7 +28,11 @@ pub struct GoogleConfig {
 
 // GtranslateConfig is currently empty; fields will be added when the
 // Google Translate (free scraper) backend is implemented in Task 12.
+// `non_exhaustive` so callers can't construct it directly and break
+// when fields are added.
 #[derive(Debug, Default, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
 pub struct GtranslateConfig {}
 
 impl Config {

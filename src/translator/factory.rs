@@ -22,9 +22,12 @@ pub fn build_translator(
     match resolved.as_str() {
         "gtranslate" => Ok(Box::new(GtranslateTranslator::new())),
         "deepl" => {
+            // Distinguish "section missing" from "key missing" so users see
+            // an actionable hint about whether to add the section header or
+            // just fill in the value.
             let cfg = config.deepl.as_ref().ok_or_else(|| AppError::MissingApiKey {
                 backend: "deepl".into(),
-                field: "[deepl].api_key".into(),
+                field: "[deepl] section".into(),
             })?;
             let key = cfg.api_key.clone().ok_or_else(|| AppError::MissingApiKey {
                 backend: "deepl".into(),
@@ -35,7 +38,7 @@ pub fn build_translator(
         "google" => {
             let cfg = config.google.as_ref().ok_or_else(|| AppError::MissingApiKey {
                 backend: "google".into(),
-                field: "[google].api_key".into(),
+                field: "[google] section".into(),
             })?;
             let key = cfg.api_key.clone().ok_or_else(|| AppError::MissingApiKey {
                 backend: "google".into(),

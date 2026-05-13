@@ -9,14 +9,30 @@ fn builds_gtranslate_with_no_config() {
 }
 
 #[test]
-fn deepl_without_key_errors() {
+fn deepl_without_section_errors() {
+    // No [deepl] section at all → the error names the section.
     let cfg = Config::default();
     // unwrap_err() requires T: Debug; use .err().unwrap() to avoid adding
     // Debug to Box<dyn Translator>.
     let err = build_translator(Some("deepl"), &cfg).err().unwrap();
     let msg = format!("{}", err);
-    assert!(msg.contains("deepl"));
-    assert!(msg.contains("api_key"));
+    assert!(msg.contains("deepl"), "got: {}", msg);
+    assert!(msg.contains("[deepl]"), "got: {}", msg);
+}
+
+#[test]
+fn deepl_with_section_but_no_key_errors() {
+    // [deepl] section present but api_key missing → the error names api_key.
+    let cfg = Config {
+        deepl: Some(DeeplConfig {
+            api_key: None,
+            api_url: None,
+        }),
+        ..Default::default()
+    };
+    let err = build_translator(Some("deepl"), &cfg).err().unwrap();
+    let msg = format!("{}", err);
+    assert!(msg.contains("api_key"), "got: {}", msg);
 }
 
 #[test]

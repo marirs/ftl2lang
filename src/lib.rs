@@ -4,4 +4,5 @@ pub mod error;
 pub mod ftl;
 pub mod lang;
 pub mod pipeline;
+pub mod sidecar;
 pub mod translator;

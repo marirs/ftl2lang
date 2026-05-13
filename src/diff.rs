@@ -16,7 +16,13 @@ pub enum Verdict {
 /// - `target_messages`: message_id → joined target text.
 /// - `sidecar`: previous-run hashes per message_id.
 ///
-/// Returns a verdict for every ID present in either map.
+/// Returns a verdict for every ID present in either map. Sidecar entries for
+/// IDs absent from both maps are silently ignored — they are stale records
+/// from a previous run and not the diff classifier's concern.
+///
+/// Note: the `Unchanged` verdict collapses two cases — confirmed match and
+/// no sidecar entry. Callers that need to distinguish "never translated"
+/// from "verified unchanged" should extend `Verdict` and split this arm.
 pub fn classify(
     source_messages: &BTreeMap<String, String>,
     target_messages: &BTreeMap<String, String>,

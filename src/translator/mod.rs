@@ -2,6 +2,7 @@ use crate::error::AppError;
 use async_trait::async_trait;
 
 pub mod deepl;
+pub mod factory;
 pub mod google;
 pub mod gtranslate;
 pub mod mock;

@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::ftl::split_whitespace;
 use fluent_syntax::ast;
 use fluent_syntax::parser;
 use std::path::{Path, PathBuf};
@@ -147,15 +148,3 @@ fn walk_expression(
     }
 }
 
-/// Split a raw `TextElement` value into (leading_whitespace, core, trailing_whitespace).
-///
-/// `core` is the trimmed text; it may be empty if the element is
-/// whitespace-only (e.g. a single space between two placeables).
-fn split_whitespace(s: &str) -> (&str, &str, &str) {
-    let trimmed_start = s.trim_start();
-    let leading_len = s.len() - trimmed_start.len();
-    let leading = &s[..leading_len];
-    let trimmed = trimmed_start.trim_end();
-    let trailing = &trimmed_start[trimmed.len()..];
-    (leading, trimmed, trailing)
-}

@@ -32,9 +32,17 @@ impl GoogleTranslator {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<Vec<String>, AppError> {
+        // The real URL carries the API key as a query parameter. We keep a
+        // sanitized version for error messages because `reqwest::Error`'s
+        // Display includes the offending URL, which would otherwise leak the
+        // key to stderr and log aggregators.
         let url = format!(
             "https://translation.googleapis.com/v3/projects/{}:translateText?key={}",
             self.project_id, self.api_key
+        );
+        let display_url = format!(
+            "https://translation.googleapis.com/v3/projects/{}:translateText",
+            self.project_id
         );
         let body = TranslateRequest {
             contents: texts.iter().map(|t| (*t).to_string()).collect(),
@@ -56,15 +64,25 @@ impl GoogleTranslator {
                     return Ok(parsed.translations.into_iter().map(|t| t.translated_text).collect());
                 }
                 Err(e) if attempt < 3 => {
-                    last_err = Some(AppError::Api(format!("google request: {}", e)));
+                    last_err = Some(redact(&display_url, &e));
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                     delay_ms *= 2;
                 }
-                Err(e) => return Err(AppError::Api(format!("google request: {}", e))),
+                Err(e) => return Err(redact(&display_url, &e)),
             }
         }
         Err(last_err.unwrap_or_else(|| AppError::Api("google: retries exhausted".into())))
     }
+}
+
+/// Build an `AppError::Api` that names the API endpoint but never includes
+/// `key=...` query parameter, so the API key cannot land in stderr or logs.
+fn redact(display_url: &str, e: &reqwest::Error) -> AppError {
+    let status = e
+        .status()
+        .map(|s| format!(" status={}", s))
+        .unwrap_or_default();
+    AppError::Api(format!("google request to {} failed{}", display_url, status))
 }
 
 #[derive(Serialize)]
@@ -95,11 +113,16 @@ impl Translator for GoogleTranslator {
         "google"
     }
 
-    fn supports(&self, _target_lang: &str) -> bool {
+    fn supports(&self, target_lang: &str) -> bool {
         // Google Cloud Translation covers 130+ languages; rather than maintain
         // a stale list, we accept any code and let the API itself surface
-        // unsupported targets via 4xx (handled by the retry loop).
-        true
+        // unsupported targets via 4xx. Reject obviously-bad codes structurally
+        // so a typo like '--to xx' doesn't burn 3 retries before failing.
+        !target_lang.is_empty()
+            && target_lang.len() >= 2
+            && target_lang
+                .chars()
+                .all(|c| c.is_ascii_alphabetic() || c == '-')
     }
 
     async fn translate_batch(

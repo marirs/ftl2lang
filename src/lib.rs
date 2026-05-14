@@ -5,6 +5,7 @@ pub mod detect;
 pub mod diff;
 pub mod error;
 pub mod folder;
+pub mod fsutil;
 pub mod ftl;
 pub mod info;
 pub mod lang;

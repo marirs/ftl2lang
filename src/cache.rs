@@ -40,15 +40,12 @@ impl TranslationCache {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), AppError> {
-        // Guard: only create parent dirs when the path has a non-empty parent component.
-        // Same pattern applied in Task 13 sidecar fix — avoids creating "." as a dir.
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::create_dir_all(parent)?;
-        }
         let body = serde_json::to_string_pretty(self)
             .map_err(|e| AppError::Other(format!("cache serialize: {}", e)))?;
-        std::fs::write(path, body)?;
-        Ok(())
+        // Atomic write: write to a sibling temp file then rename, so a crash
+        // mid-write can't leave a truncated cache. atomic_write also creates
+        // the parent directory when needed.
+        crate::fsutil::atomic_write(path, &body)
     }
 
     pub fn get(&self, text: &str, src: &str, tgt: &str, backend: &str) -> Option<String> {

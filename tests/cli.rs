@@ -75,3 +75,12 @@ fn list_translators_does_not_require_to_or_input() {
     assert!(args.list_translators);
     args.validate().unwrap();
 }
+
+#[test]
+fn clear_cache_does_not_require_to_or_input() {
+    let args = Args::try_parse_from(["ftl2lang", "--clear-cache"]).unwrap();
+    assert!(args.clear_cache);
+    assert!(args.input.is_none());
+    assert!(args.to.is_none());
+    args.validate().unwrap();
+}

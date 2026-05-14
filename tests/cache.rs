@@ -40,3 +40,38 @@ fn save_and_load_persists() {
     let cache = TranslationCache::load(&path).unwrap();
     assert_eq!(cache.get("Hello", "en", "de", "deepl").as_deref(), Some("Hallo"));
 }
+
+#[test]
+fn clear_missing_cache_returns_none() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("nope.json");
+    assert_eq!(TranslationCache::clear(&path).unwrap(), None);
+}
+
+#[test]
+fn clear_reports_entry_count_and_deletes_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("cache.json");
+    {
+        let mut cache = TranslationCache::load(&path).unwrap();
+        cache.put("Hello", "en", "de", "deepl", "Hallo");
+        cache.put("Bye", "en", "de", "deepl", "Tschüss");
+        cache.save(&path).unwrap();
+    }
+    assert_eq!(TranslationCache::clear(&path).unwrap(), Some(2));
+    assert!(!path.exists(), "cache file should be deleted after clear");
+}
+
+#[test]
+fn clear_is_idempotent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("cache.json");
+    {
+        let mut cache = TranslationCache::load(&path).unwrap();
+        cache.put("Hi", "en", "de", "deepl", "Hallo");
+        cache.save(&path).unwrap();
+    }
+    assert_eq!(TranslationCache::clear(&path).unwrap(), Some(1));
+    // Second clear: file is already gone, so None — not an error.
+    assert_eq!(TranslationCache::clear(&path).unwrap(), None);
+}

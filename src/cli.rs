@@ -72,13 +72,18 @@ pub struct Args {
     /// mode 0600. Does not require --to or <INPUT>.
     #[arg(long)]
     pub create_config: bool,
+
+    /// Delete the on-disk translation cache and exit. Reports how many
+    /// entries were cleared. Does not require --to or <INPUT>.
+    #[arg(long)]
+    pub clear_cache: bool,
 }
 
 impl Args {
     /// Whether the invocation is a "list-and-exit" query rather than a
     /// translation run. List runs do not need --to or <INPUT>.
     pub fn is_list_query(&self) -> bool {
-        self.list_langs || self.list_translators || self.create_config
+        self.list_langs || self.list_translators || self.create_config || self.clear_cache
     }
 
     /// Validate the combination of flags. Translation runs require both

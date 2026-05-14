@@ -80,6 +80,22 @@ impl TranslationCache {
             .join("ftl2lang")
             .join("translations.json")
     }
+
+    /// Delete the cache file at `path`. Returns `Some(n)` with the number of
+    /// entries that were in the cache, or `None` if there was no cache file
+    /// to delete. A missing file is not an error — there is simply nothing
+    /// to clear.
+    pub fn clear(path: &Path) -> Result<Option<usize>, AppError> {
+        if !path.exists() {
+            return Ok(None);
+        }
+        // Count entries before removing so the caller can report what was
+        // cleared. A parse failure here is non-fatal: we still delete the
+        // file (it was unusable anyway) and report an unknown count.
+        let count = Self::load(path).map(|c| c.entries.len()).ok();
+        std::fs::remove_file(path)?;
+        Ok(Some(count.unwrap_or(0)))
+    }
 }
 
 /// SHA-256 of `text|src|tgt|backend` — stable, collision-resistant cache key.

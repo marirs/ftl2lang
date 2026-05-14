@@ -61,6 +61,18 @@ async fn run() -> Result<(), AppError> {
         ftl2lang::setup::run_interactive_setup(&config_path).await?;
         return Ok(());
     }
+    if args.clear_cache {
+        let cache_path = TranslationCache::default_path();
+        match TranslationCache::clear(&cache_path)? {
+            Some(n) => println!(
+                "Cleared {} cached translation(s) from {}",
+                n,
+                cache_path.display()
+            ),
+            None => println!("No cache to clear at {}", cache_path.display()),
+        }
+        return Ok(());
+    }
 
     // Translation runs require both --to and <INPUT>.
     args.validate().map_err(AppError::Other)?;

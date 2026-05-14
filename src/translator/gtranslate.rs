@@ -16,6 +16,7 @@ const GTRANSLATE_CONCURRENCY: usize = 4;
 /// One HTTP request per text; bounded concurrency to avoid rate-limiting.
 pub struct GtranslateTranslator {
     client: Client,
+    verbose: bool,
 }
 
 impl GtranslateTranslator {
@@ -27,7 +28,16 @@ impl GtranslateTranslator {
             .user_agent("Mozilla/5.0 (compatible; ftl2lang/0.1)")
             .build()
             .expect("reqwest client build");
-        Self { client }
+        Self {
+            client,
+            verbose: false,
+        }
+    }
+
+    /// Enable per-request diagnostic logging to stderr.
+    pub fn with_verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
+        self
     }
 }
 
@@ -64,6 +74,16 @@ impl Translator for GtranslateTranslator {
         // `buffered(N)` runs at most N futures concurrently and preserves
         // input order, so the returned Vec aligns with `texts`. We drain it
         // with a while-loop so the progress bar can tick after each yield.
+        if self.verbose {
+            eprintln!(
+                "gtranslate: {} request(s) {}→{}, up to {} concurrent",
+                texts.len(),
+                source_lang,
+                target_lang,
+                GTRANSLATE_CONCURRENCY
+            );
+        }
+
         let mut stream = stream::iter(owned.into_iter().map(|text| {
             translate_one(&self.client, text, src.clone(), tgt.clone())
         }))

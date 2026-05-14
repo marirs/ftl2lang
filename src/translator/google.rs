@@ -16,6 +16,7 @@ pub struct GoogleTranslator {
     client: Client,
     api_key: String,
     project_id: String,
+    verbose: bool,
 }
 
 impl GoogleTranslator {
@@ -24,7 +25,18 @@ impl GoogleTranslator {
             .timeout(Duration::from_secs(30))
             .build()
             .expect("reqwest client build");
-        Self { client, api_key, project_id }
+        Self {
+            client,
+            api_key,
+            project_id,
+            verbose: false,
+        }
+    }
+
+    /// Enable per-request diagnostic logging to stderr.
+    pub fn with_verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
+        self
     }
 
     async fn translate_chunk(
@@ -133,8 +145,22 @@ impl Translator for GoogleTranslator {
         target_lang: &str,
         progress: Option<&ProgressBar>,
     ) -> Result<Vec<String>, AppError> {
+        if self.verbose {
+            let chunks = texts.len().div_ceil(GOOGLE_MAX_TEXTS_PER_REQUEST);
+            eprintln!(
+                "google: {} text(s) {}→{} in {} request(s) (≤{} per request)",
+                texts.len(),
+                source_lang,
+                target_lang,
+                chunks,
+                GOOGLE_MAX_TEXTS_PER_REQUEST
+            );
+        }
         let mut out = Vec::with_capacity(texts.len());
-        for chunk in texts.chunks(GOOGLE_MAX_TEXTS_PER_REQUEST) {
+        for (i, chunk) in texts.chunks(GOOGLE_MAX_TEXTS_PER_REQUEST).enumerate() {
+            if self.verbose {
+                eprintln!("google:   request {} — {} text(s)", i + 1, chunk.len());
+            }
             let translated = self.translate_chunk(chunk, source_lang, target_lang).await?;
             out.extend(translated);
             if let Some(bar) = progress {

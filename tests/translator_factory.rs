@@ -4,7 +4,7 @@ use ftl2lang::translator::factory::build_translator;
 #[test]
 fn builds_gtranslate_with_no_config() {
     let cfg = Config::default();
-    let t = build_translator(Some("gtranslate"), &cfg).unwrap();
+    let t = build_translator(Some("gtranslate"), &cfg, false).unwrap();
     assert_eq!(t.name(), "gtranslate");
 }
 
@@ -14,7 +14,7 @@ fn deepl_without_section_errors() {
     let cfg = Config::default();
     // unwrap_err() requires T: Debug; use .err().unwrap() to avoid adding
     // Debug to Box<dyn Translator>.
-    let err = build_translator(Some("deepl"), &cfg).err().unwrap();
+    let err = build_translator(Some("deepl"), &cfg, false).err().unwrap();
     let msg = format!("{}", err);
     assert!(msg.contains("deepl"), "got: {}", msg);
     assert!(msg.contains("[deepl]"), "got: {}", msg);
@@ -30,7 +30,7 @@ fn deepl_with_section_but_no_key_errors() {
         }),
         ..Default::default()
     };
-    let err = build_translator(Some("deepl"), &cfg).err().unwrap();
+    let err = build_translator(Some("deepl"), &cfg, false).err().unwrap();
     let msg = format!("{}", err);
     assert!(msg.contains("api_key"), "got: {}", msg);
 }
@@ -44,14 +44,14 @@ fn deepl_with_key_builds() {
         }),
         ..Default::default()
     };
-    let t = build_translator(Some("deepl"), &cfg).unwrap();
+    let t = build_translator(Some("deepl"), &cfg, false).unwrap();
     assert_eq!(t.name(), "deepl");
 }
 
 #[test]
 fn default_to_gtranslate_when_no_flag_no_config() {
     let cfg = Config::default();
-    let t = build_translator(None, &cfg).unwrap();
+    let t = build_translator(None, &cfg, false).unwrap();
     assert_eq!(t.name(), "gtranslate");
 }
 
@@ -60,6 +60,6 @@ fn unknown_translator_name_errors() {
     let cfg = Config::default();
     // unwrap_err() requires T: Debug; use .err().unwrap() to avoid adding
     // Debug to Box<dyn Translator>.
-    let err = build_translator(Some("nopes"), &cfg).err().unwrap();
+    let err = build_translator(Some("nopes"), &cfg, false).err().unwrap();
     assert!(format!("{}", err).contains("nopes"));
 }

@@ -8,11 +8,14 @@ use crate::error::AppError;
 /// Build a translator implementation from a `--translator` flag value (None
 /// to use the config default, or "gtranslate" if no config default either).
 ///
+/// `verbose` enables per-request diagnostic logging inside the backend.
+///
 /// Returns `MissingApiKey` when the requested backend needs configuration
 /// that is not present.
 pub fn build_translator(
     name: Option<&str>,
     config: &Config,
+    verbose: bool,
 ) -> Result<Box<dyn Translator>, AppError> {
     let resolved: String = name
         .map(|s| s.to_string())
@@ -20,7 +23,7 @@ pub fn build_translator(
         .unwrap_or_else(|| "gtranslate".to_string());
 
     match resolved.as_str() {
-        "gtranslate" => Ok(Box::new(GtranslateTranslator::new())),
+        "gtranslate" => Ok(Box::new(GtranslateTranslator::new().with_verbose(verbose))),
         "deepl" => {
             // Distinguish "section missing" from "key missing" so users see
             // an actionable hint about whether to add the section header or
@@ -33,7 +36,9 @@ pub fn build_translator(
                 backend: "deepl".into(),
                 field: "[deepl].api_key".into(),
             })?;
-            Ok(Box::new(DeeplTranslator::new(key, cfg.api_url.clone())))
+            Ok(Box::new(
+                DeeplTranslator::new(key, cfg.api_url.clone()).with_verbose(verbose),
+            ))
         }
         "google" => {
             let cfg = config.google.as_ref().ok_or_else(|| AppError::MissingApiKey {
@@ -48,7 +53,9 @@ pub fn build_translator(
                 backend: "google".into(),
                 field: "[google].project_id".into(),
             })?;
-            Ok(Box::new(GoogleTranslator::new(key, project)))
+            Ok(Box::new(
+                GoogleTranslator::new(key, project).with_verbose(verbose),
+            ))
         }
         other => Err(AppError::Other(format!(
             "unknown translator '{}'. Valid: deepl | google | gtranslate.",

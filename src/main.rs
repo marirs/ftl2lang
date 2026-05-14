@@ -72,8 +72,41 @@ async fn run() -> Result<(), AppError> {
     let config = Config::load_from_path(&config_path)?;
     warn_if_config_world_readable(&config_path);
 
+    if args.verbose {
+        if config_path.exists() {
+            let mut configured: Vec<&str> = Vec::new();
+            if config.deepl.is_some() {
+                configured.push("deepl");
+            }
+            if config.google.is_some() {
+                configured.push("google");
+            }
+            if config.gtranslate.is_some() {
+                configured.push("gtranslate");
+            }
+            let backends = if configured.is_empty() {
+                "none".to_string()
+            } else {
+                configured.join(", ")
+            };
+            eprintln!(
+                "config: loaded {} (backends configured: {})",
+                config_path.display(),
+                backends
+            );
+        } else {
+            eprintln!(
+                "config: {} not found — using defaults",
+                config_path.display()
+            );
+        }
+    }
+
     // Build translator
-    let translator = build_translator(args.translator.as_deref(), &config)?;
+    let translator = build_translator(args.translator.as_deref(), &config, args.verbose)?;
+    if args.verbose {
+        eprintln!("translator: {}", translator.name());
+    }
 
     // Verify backend supports target.
     if !translator.supports(&target_lang) {
@@ -356,10 +389,18 @@ fn resolve_source_lang(
     // back to whatlang detection (which then asks the user to confirm) if
     // neither is set.
     if let Some(from) = &args.from {
-        return Ok(normalize(from));
+        let code = normalize(from);
+        if args.verbose {
+            eprintln!("source language: {} (from --from)", code);
+        }
+        return Ok(code);
     }
     if let Some(default) = config_default {
-        return Ok(normalize(default));
+        let code = normalize(default);
+        if args.verbose {
+            eprintln!("source language: {} (from config default_source)", code);
+        }
+        return Ok(code);
     }
 
     // Extract sample text from the source for detection.
@@ -367,6 +408,13 @@ fn resolve_source_lang(
     let owned: Vec<String> = spans.into_iter().take(20).map(|s| s.text).collect();
     let texts: Vec<&str> = owned.iter().map(|s| s.as_str()).collect();
     let detected = detect_source_language(&texts)?;
+
+    if args.verbose {
+        eprintln!(
+            "source language: {} (detected, confidence {:.2})",
+            detected.code, detected.confidence
+        );
+    }
 
     if args.yes {
         return Ok(detected.code);

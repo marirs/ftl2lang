@@ -18,8 +18,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// indicatif template: shown when we know the total span count.
-const PROGRESS_TEMPLATE: &str =
-    "  {bar:30.cyan/blue} {pos}/{len} {msg}";
+const PROGRESS_TEMPLATE: &str = "  {bar:30.cyan/blue} {pos}/{len} {msg}";
 
 fn make_bar(total: u64, label: &str) -> ProgressBar {
     let bar = ProgressBar::new(total);
@@ -315,10 +314,7 @@ async fn process_folder(
         let prev_sidecar = Sidecar::load(&sidecar_path)?;
 
         let initial_total = walk_source(&src, Some(file.as_path()))?.len() as u64;
-        let inner = multi.add(make_bar(
-            initial_total,
-            &format!("{}", file.display()),
-        ));
+        let inner = multi.add(make_bar(initial_total, &format!("{}", file.display())));
 
         match translate_file_incremental(
             &src,
@@ -507,7 +503,12 @@ impl<'a> Translator for CachingTranslator<'a> {
         {
             let cache = self.cache.lock().unwrap();
             for (i, text) in texts.iter().enumerate() {
-                if let Some(hit) = cache.get(text, &self.source_lang, &self.target_lang, self.inner.name()) {
+                if let Some(hit) = cache.get(
+                    text,
+                    &self.source_lang,
+                    &self.target_lang,
+                    self.inner.name(),
+                ) {
                     results[i] = Some(hit);
                     hit_count += 1;
                 } else {
@@ -531,7 +532,13 @@ impl<'a> Translator for CachingTranslator<'a> {
                 .await?;
             let mut cache = self.cache.lock().unwrap();
             for ((idx, text), tr) in to_fetch.iter().zip(translated.iter()) {
-                cache.put(text, &self.source_lang, &self.target_lang, self.inner.name(), tr);
+                cache.put(
+                    text,
+                    &self.source_lang,
+                    &self.target_lang,
+                    self.inner.name(),
+                    tr,
+                );
                 results[*idx] = Some(tr.clone());
             }
         }

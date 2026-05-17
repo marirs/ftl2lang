@@ -125,9 +125,7 @@ fn prompt_deepl(
         Some(key)
     };
 
-    let url_default = existing
-        .and_then(|d| d.api_url.clone())
-        .unwrap_or_default();
+    let url_default = existing.and_then(|d| d.api_url.clone()).unwrap_or_default();
     let api_url_input: String = Input::with_theme(theme)
         .with_prompt("DeepL API URL (Enter for free-tier default)")
         .default(url_default)

@@ -24,11 +24,13 @@ pub struct DetectedLanguage {
 /// to a translator backend.
 pub fn detect_source_language(texts: &[&str]) -> Result<DetectedLanguage, AppError> {
     if texts.is_empty() {
-        return Err(AppError::Other("cannot detect language: no text provided".into()));
+        return Err(AppError::Other(
+            "cannot detect language: no text provided".into(),
+        ));
     }
     let combined = texts.join(" ");
-    let info = detect(&combined)
-        .ok_or_else(|| AppError::Other("language detection failed".into()))?;
+    let info =
+        detect(&combined).ok_or_else(|| AppError::Other("language detection failed".into()))?;
     let code = lang_to_iso639_1(info.lang());
     if code == "und" {
         return Err(AppError::Other(format!(

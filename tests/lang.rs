@@ -1,4 +1,4 @@
-use ftl2lang::lang::{normalize, display_name};
+use ftl2lang::lang::{display_name, normalize};
 
 #[test]
 fn normalize_lowercases_simple_code() {

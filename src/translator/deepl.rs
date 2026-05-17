@@ -12,8 +12,8 @@ use std::time::Duration;
 /// receive a clear `supports() == false` rather than an opaque HTTP 400 from
 /// the DeepL API for unsupported targets (e.g. "ta", "hi").
 pub const DEEPL_SUPPORTED_LANGS: &[&str] = &[
-    "ar", "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hu", "id", "it", "ja",
-    "ko", "lt", "lv", "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "zh",
+    "ar", "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hu", "id", "it", "ja", "ko",
+    "lt", "lv", "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "zh",
 ];
 
 /// DeepL caps a single `/translate` request at 50 texts. Larger batches are
@@ -160,7 +160,9 @@ impl Translator for DeeplTranslator {
             if self.verbose {
                 eprintln!("deepl:   request {} — {} text(s)", i + 1, chunk.len());
             }
-            let translated = self.translate_chunk(chunk, source_lang, target_lang).await?;
+            let translated = self
+                .translate_chunk(chunk, source_lang, target_lang)
+                .await?;
             out.extend(translated);
             if let Some(bar) = progress {
                 bar.inc(chunk.len() as u64);

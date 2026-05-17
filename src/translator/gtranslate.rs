@@ -84,9 +84,11 @@ impl Translator for GtranslateTranslator {
             );
         }
 
-        let mut stream = stream::iter(owned.into_iter().map(|text| {
-            translate_one(&self.client, text, src.clone(), tgt.clone())
-        }))
+        let mut stream = stream::iter(
+            owned
+                .into_iter()
+                .map(|text| translate_one(&self.client, text, src.clone(), tgt.clone())),
+        )
         .buffered(GTRANSLATE_CONCURRENCY);
 
         let mut out = Vec::with_capacity(texts.len());
@@ -130,15 +132,12 @@ async fn translate_one(
         .map_err(|e| AppError::Api(format!("gtranslate body: {}", e)))?;
 
     // Response shape: [[["translated", "original", ...], ...], ...]
-    let segments = body
-        .get(0)
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| {
-            AppError::Api(format!(
-                "gtranslate: unexpected response shape; body={}",
-                body
-            ))
-        })?;
+    let segments = body.get(0).and_then(|v| v.as_array()).ok_or_else(|| {
+        AppError::Api(format!(
+            "gtranslate: unexpected response shape; body={}",
+            body
+        ))
+    })?;
 
     let mut combined = String::new();
     for seg in segments {

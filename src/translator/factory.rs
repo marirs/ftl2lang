@@ -28,10 +28,13 @@ pub fn build_translator(
             // Distinguish "section missing" from "key missing" so users see
             // an actionable hint about whether to add the section header or
             // just fill in the value.
-            let cfg = config.deepl.as_ref().ok_or_else(|| AppError::MissingApiKey {
-                backend: "deepl".into(),
-                field: "[deepl] section".into(),
-            })?;
+            let cfg = config
+                .deepl
+                .as_ref()
+                .ok_or_else(|| AppError::MissingApiKey {
+                    backend: "deepl".into(),
+                    field: "[deepl] section".into(),
+                })?;
             let key = cfg.api_key.clone().ok_or_else(|| AppError::MissingApiKey {
                 backend: "deepl".into(),
                 field: "[deepl].api_key".into(),
@@ -41,18 +44,24 @@ pub fn build_translator(
             ))
         }
         "google" => {
-            let cfg = config.google.as_ref().ok_or_else(|| AppError::MissingApiKey {
-                backend: "google".into(),
-                field: "[google] section".into(),
-            })?;
+            let cfg = config
+                .google
+                .as_ref()
+                .ok_or_else(|| AppError::MissingApiKey {
+                    backend: "google".into(),
+                    field: "[google] section".into(),
+                })?;
             let key = cfg.api_key.clone().ok_or_else(|| AppError::MissingApiKey {
                 backend: "google".into(),
                 field: "[google].api_key".into(),
             })?;
-            let project = cfg.project_id.clone().ok_or_else(|| AppError::MissingApiKey {
-                backend: "google".into(),
-                field: "[google].project_id".into(),
-            })?;
+            let project = cfg
+                .project_id
+                .clone()
+                .ok_or_else(|| AppError::MissingApiKey {
+                    backend: "google".into(),
+                    field: "[google].project_id".into(),
+                })?;
             Ok(Box::new(
                 GoogleTranslator::new(key, project).with_verbose(verbose),
             ))

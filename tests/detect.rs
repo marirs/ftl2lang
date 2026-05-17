@@ -38,6 +38,9 @@ fn unmapped_language_returns_error_not_und_code() {
     // testing is that IF whatlang produces a Lang we have not mapped, we
     // return Err. So we only assert the negative: never an Ok with "und".
     if let Ok(ok) = result {
-        assert_ne!(ok.code, "und", "must never expose 'und' through DetectedLanguage");
+        assert_ne!(
+            ok.code, "und",
+            "must never expose 'und' through DetectedLanguage"
+        );
     }
 }

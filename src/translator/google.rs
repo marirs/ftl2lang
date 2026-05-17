@@ -74,7 +74,11 @@ impl GoogleTranslator {
                         .json()
                         .await
                         .map_err(|e| AppError::Api(format!("google body: {}", e)))?;
-                    return Ok(parsed.translations.into_iter().map(|t| t.translated_text).collect());
+                    return Ok(parsed
+                        .translations
+                        .into_iter()
+                        .map(|t| t.translated_text)
+                        .collect());
                 }
                 Err(e) if attempt < 3 => {
                     last_err = Some(redact(&display_url, &e));
@@ -95,7 +99,10 @@ fn redact(display_url: &str, e: &reqwest::Error) -> AppError {
         .status()
         .map(|s| format!(" status={}", s))
         .unwrap_or_default();
-    AppError::Api(format!("google request to {} failed{}", display_url, status))
+    AppError::Api(format!(
+        "google request to {} failed{}",
+        display_url, status
+    ))
 }
 
 #[derive(Serialize)]
@@ -161,7 +168,9 @@ impl Translator for GoogleTranslator {
             if self.verbose {
                 eprintln!("google:   request {} — {} text(s)", i + 1, chunk.len());
             }
-            let translated = self.translate_chunk(chunk, source_lang, target_lang).await?;
+            let translated = self
+                .translate_chunk(chunk, source_lang, target_lang)
+                .await?;
             out.extend(translated);
             if let Some(bar) = progress {
                 bar.inc(chunk.len() as u64);

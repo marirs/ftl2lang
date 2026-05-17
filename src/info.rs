@@ -10,8 +10,8 @@ use crate::translator::deepl::DEEPL_SUPPORTED_LANGS;
 /// All ISO 639-1 codes we have a friendly display name for. This is also the
 /// "known set" we list for backends that accept any code (google, gtranslate).
 const KNOWN_CODES: &[&str] = &[
-    "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "ja", "ko", "zh", "ta", "hi", "th",
-    "vi", "id", "ar", "he", "fa", "tr",
+    "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "ja", "ko", "zh", "ta", "hi", "th", "vi",
+    "id", "ar", "he", "fa", "tr",
 ];
 
 /// Render the `--list-translators` output.

@@ -14,7 +14,10 @@ fn put_then_get_hits() {
     let path = tmp.path().join("cache.json");
     let mut cache = TranslationCache::load(&path).unwrap();
     cache.put("Hello", "en", "de", "deepl", "Hallo");
-    assert_eq!(cache.get("Hello", "en", "de", "deepl").as_deref(), Some("Hallo"));
+    assert_eq!(
+        cache.get("Hello", "en", "de", "deepl").as_deref(),
+        Some("Hallo")
+    );
 }
 
 #[test]
@@ -24,8 +27,14 @@ fn keys_differ_by_backend() {
     let mut cache = TranslationCache::load(&path).unwrap();
     cache.put("Hello", "en", "de", "deepl", "Hallo (deepl)");
     cache.put("Hello", "en", "de", "google", "Hallo (google)");
-    assert_eq!(cache.get("Hello", "en", "de", "deepl").as_deref(), Some("Hallo (deepl)"));
-    assert_eq!(cache.get("Hello", "en", "de", "google").as_deref(), Some("Hallo (google)"));
+    assert_eq!(
+        cache.get("Hello", "en", "de", "deepl").as_deref(),
+        Some("Hallo (deepl)")
+    );
+    assert_eq!(
+        cache.get("Hello", "en", "de", "google").as_deref(),
+        Some("Hallo (google)")
+    );
 }
 
 #[test]
@@ -38,7 +47,10 @@ fn save_and_load_persists() {
         cache.save(&path).unwrap();
     }
     let cache = TranslationCache::load(&path).unwrap();
-    assert_eq!(cache.get("Hello", "en", "de", "deepl").as_deref(), Some("Hallo"));
+    assert_eq!(
+        cache.get("Hello", "en", "de", "deepl").as_deref(),
+        Some("Hallo")
+    );
 }
 
 #[test]

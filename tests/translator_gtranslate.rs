@@ -14,8 +14,15 @@ fn name_and_supports_all_langs() {
 #[ignore]
 async fn live_translates_simple_string() {
     let t = GtranslateTranslator::new();
-    let out = t.translate_batch(&["Hello"], "en", "de", None).await.unwrap();
+    let out = t
+        .translate_batch(&["Hello"], "en", "de", None)
+        .await
+        .unwrap();
     assert_eq!(out.len(), 1);
     let lower = out[0].to_lowercase();
-    assert!(lower.contains("hallo") || lower.contains("guten"), "got: {}", out[0]);
+    assert!(
+        lower.contains("hallo") || lower.contains("guten"),
+        "got: {}",
+        out[0]
+    );
 }

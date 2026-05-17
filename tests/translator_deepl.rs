@@ -28,6 +28,9 @@ fn supported_list_includes_known_langs() {
 async fn live_translates_with_real_key() {
     let key = std::env::var("DEEPL_API_KEY").expect("DEEPL_API_KEY required");
     let t = DeeplTranslator::new(key, None);
-    let out = t.translate_batch(&["Hello", "Goodbye"], "en", "de", None).await.unwrap();
+    let out = t
+        .translate_batch(&["Hello", "Goodbye"], "en", "de", None)
+        .await
+        .unwrap();
     assert_eq!(out.len(), 2);
 }

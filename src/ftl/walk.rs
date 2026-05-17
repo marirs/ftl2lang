@@ -45,7 +45,9 @@ pub fn walk_source(src: &str, path: Option<&Path>) -> Result<Vec<TranslatableSpa
     // refuse to walk anything: a translation tool must not silently translate
     // half of a malformed file.
     let resource = parser::parse(src).map_err(|(_, errs)| AppError::FtlParse {
-        path: path.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("<input>")),
+        path: path
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("<input>")),
         message: format!("{} error(s); first: {:?}", errs.len(), errs.first()),
     })?;
 
@@ -147,4 +149,3 @@ fn walk_expression(
         }
     }
 }
-

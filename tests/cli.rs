@@ -5,7 +5,10 @@ use ftl2lang::cli::Args;
 fn parses_minimal_invocation() {
     let args = Args::try_parse_from(["ftl2lang", "--to", "de", "en.ftl"]).unwrap();
     assert_eq!(args.to.as_deref(), Some("de"));
-    assert_eq!(args.input.as_deref().and_then(|p| p.to_str()), Some("en.ftl"));
+    assert_eq!(
+        args.input.as_deref().and_then(|p| p.to_str()),
+        Some("en.ftl")
+    );
     assert!(args.from.is_none());
     assert!(!args.force);
     assert!(!args.cache);
@@ -18,10 +21,14 @@ fn parses_minimal_invocation() {
 fn parses_all_flags() {
     let args = Args::try_parse_from([
         "ftl2lang",
-        "--to", "de",
-        "--from", "en",
-        "--translator", "deepl",
-        "--out", "out.ftl",
+        "--to",
+        "de",
+        "--from",
+        "en",
+        "--translator",
+        "deepl",
+        "--out",
+        "out.ftl",
         "--force",
         "--prune",
         "--cache",
@@ -34,7 +41,10 @@ fn parses_all_flags() {
     assert_eq!(args.to.as_deref(), Some("de"));
     assert_eq!(args.from.as_deref(), Some("en"));
     assert_eq!(args.translator.as_deref(), Some("deepl"));
-    assert_eq!(args.out.as_deref().and_then(|p| p.to_str()), Some("out.ftl"));
+    assert_eq!(
+        args.out.as_deref().and_then(|p| p.to_str()),
+        Some("out.ftl")
+    );
     assert!(args.force);
     assert!(args.prune);
     assert!(args.cache);

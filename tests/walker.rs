@@ -53,9 +53,15 @@ fn attributes_produce_spans_with_attribute_set() {
     let src = read_fixture("with_attributes.ftl");
     let spans = walk_source(&src, None).unwrap();
 
-    assert!(spans.iter().any(|s| s.entry_id == "login-button" && s.attribute.is_none() && s.text == "Log in"));
-    assert!(spans.iter().any(|s| s.attribute.as_deref() == Some("title") && s.text == "Click to log in"));
-    assert!(spans.iter().any(|s| s.attribute.as_deref() == Some("aria-label") && s.text == "Log in to your account"));
+    assert!(spans
+        .iter()
+        .any(|s| s.entry_id == "login-button" && s.attribute.is_none() && s.text == "Log in"));
+    assert!(spans
+        .iter()
+        .any(|s| s.attribute.as_deref() == Some("title") && s.text == "Click to log in"));
+    assert!(spans.iter().any(
+        |s| s.attribute.as_deref() == Some("aria-label") && s.text == "Log in to your account"
+    ));
 }
 
 #[test]

@@ -31,7 +31,9 @@ pub fn splice_translations(
     }
 
     let mut resource = parser::parse(src).map_err(|(_, errs)| AppError::FtlParse {
-        path: path.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("<input>")),
+        path: path
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("<input>")),
         message: format!("{} error(s); first: {:?}", errs.len(), errs.first()),
     })?;
 

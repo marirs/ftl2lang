@@ -96,11 +96,11 @@ impl DeeplTranslator {
                     return Ok(parsed.translations.into_iter().map(|t| t.text).collect());
                 }
                 Err(e) if attempt < 3 => {
-                    last_err = Some(AppError::Api(format!("deepl request: {}", e)));
+                    last_err = Some(redact(&url, &e));
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                     delay_ms *= 2;
                 }
-                Err(e) => return Err(AppError::Api(format!("deepl request: {}", e))),
+                Err(e) => return Err(redact(&url, &e)),
             }
         }
         // Defensive: the `attempt < 3` arm above always sets `last_err`, and
@@ -109,6 +109,19 @@ impl DeeplTranslator {
         // to be visually verified against the loop bounds.
         Err(last_err.unwrap_or_else(|| AppError::Api("deepl: retries exhausted".into())))
     }
+}
+
+/// Build an `AppError::Api` that names the endpoint and status but never
+/// includes the auth header. `reqwest::Error::Display` does not currently
+/// include request headers, so the key was safe even with direct `{}`
+/// formatting — but the Google backend already redacts and consistency
+/// prevents a future reqwest change from quietly leaking the key.
+fn redact(endpoint: &str, e: &reqwest::Error) -> AppError {
+    let status = e
+        .status()
+        .map(|s| format!(" status={}", s))
+        .unwrap_or_default();
+    AppError::Api(format!("deepl request to {} failed{}", endpoint, status))
 }
 
 #[derive(Deserialize)]

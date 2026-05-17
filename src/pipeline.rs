@@ -57,6 +57,11 @@ pub struct Summary {
 /// longer in `src`) are appended to the output under a separator comment so
 /// human edits are not silently lost. When `prune` is true, those messages
 /// are dropped.
+// Clippy: 9 args is genuinely a lot, but every arg here is independent
+// pipeline state and grouping them into a struct just shifts the noise
+// from the call site to the construction site without saving lines.
+// Revisit if a 10th arg is needed.
+#[allow(clippy::too_many_arguments)]
 pub async fn translate_file_incremental<T: Translator + ?Sized>(
     src: &str,
     prev_target: Option<&str>,

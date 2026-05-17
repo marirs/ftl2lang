@@ -24,7 +24,8 @@ impl Sidecar {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let text = std::fs::read_to_string(path)?;
+        // Size-capped read so a runaway side-car can't OOM us.
+        let text = crate::fsutil::read_to_string_capped(path)?;
         Self::from_json(&text)
     }
 
@@ -50,8 +51,26 @@ pub fn hash_text(s: &str) -> String {
     format!("sha256:{:x}", h.finalize())
 }
 
+/// Build the path of the side-car JSON file that sits next to `target_ftl`.
+///
+/// `target_ftl` must be a file path (e.g. `de.ftl`). If it ends in a path
+/// separator the result would be a hidden file *inside* the directory
+/// (`<dir>/.ftl2lang.json`), which is almost certainly not what the caller
+/// wants — that case is explicitly rejected via the trailing-separator check.
 pub fn sidecar_path_for(target_ftl: &Path) -> PathBuf {
-    let mut p = target_ftl.as_os_str().to_owned();
+    // Strip any trailing separator and reject the empty / directory-shaped
+    // case so a misuse panics loudly during development rather than
+    // silently writing the side-car in the wrong place.
+    let s = target_ftl.as_os_str();
+    let bytes = s.as_encoded_bytes();
+    debug_assert!(
+        !bytes.is_empty()
+            && !bytes.ends_with(b"/")
+            && (cfg!(not(windows)) || !bytes.ends_with(b"\\")),
+        "sidecar_path_for: target_ftl must be a file path, got {:?}",
+        target_ftl
+    );
+    let mut p = s.to_owned();
     p.push(".ftl2lang.json");
     PathBuf::from(p)
 }

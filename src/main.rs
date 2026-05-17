@@ -304,7 +304,7 @@ async fn process_folder(
     let outer = multi.add(make_bar(files.len() as u64, "files"));
 
     for file in &files {
-        let out_path = target_path_for(file, source_root, &target_root);
+        let out_path = target_path_for(file, source_root, &target_root)?;
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -543,6 +543,13 @@ impl<'a> Translator for CachingTranslator<'a> {
             }
         }
 
-        Ok(results.into_iter().map(|o| o.unwrap_or_default()).collect())
+        // Every slot is filled either by a cache hit (above) or by the
+        // backend fetch (just above). If any slot is still None here, the
+        // assembly logic is wrong — fail loudly rather than silently
+        // returning an empty translation that would corrupt the output.
+        Ok(results
+            .into_iter()
+            .map(|o| o.expect("CachingTranslator: result slot must be filled by hit or fetch"))
+            .collect())
     }
 }

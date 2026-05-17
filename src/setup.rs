@@ -197,12 +197,17 @@ fn prompt_google(
 }
 
 fn prompt_gtranslate(
-    theme: &ColorfulTheme,
-    existing_enabled: bool,
+    _theme: &ColorfulTheme,
+    _existing_enabled: bool,
 ) -> Result<Option<GtranslateConfig>, AppError> {
-    let enable = Confirm::with_theme(theme)
+    // We always default to "yes" — gtranslate needs no credentials so
+    // there's no reason to leave it disabled. If the user wants to opt
+    // out they can edit the config file directly and remove [gtranslate].
+    // `_existing_enabled` was previously combined as `enabled || true`,
+    // which is unconditionally true — clippy::overly_complex_bool_expr.
+    let enable = Confirm::with_theme(_theme)
         .with_prompt("Enable gtranslate (free, unofficial)?")
-        .default(existing_enabled || true)
+        .default(true)
         .interact()
         .map_err(prompt_err)?;
     Ok(if enable {
@@ -262,14 +267,35 @@ fn prompt_default_source(
     theme: &ColorfulTheme,
     existing: Option<&str>,
 ) -> Result<Option<String>, AppError> {
+    // Re-prompt on unknown codes so a typo doesn't land in the config and
+    // confuse a translator backend later. Empty input is the explicit
+    // "skip" sentinel. Cap retries so a non-interactive caller can't loop
+    // forever.
     let default = existing.unwrap_or("").to_string();
-    let s: String = Input::with_theme(theme)
-        .with_prompt("Default source language code (e.g. en) — Enter to skip")
-        .default(default)
-        .allow_empty(true)
-        .interact_text()
-        .map_err(prompt_err)?;
-    Ok(if s.trim().is_empty() { None } else { Some(s) })
+    for _ in 0..3 {
+        let s: String = Input::with_theme(theme)
+            .with_prompt("Default source language code (e.g. en) — Enter to skip")
+            .default(default.clone())
+            .allow_empty(true)
+            .interact_text()
+            .map_err(prompt_err)?;
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        if crate::lang::is_known(trimmed) {
+            return Ok(Some(trimmed.to_string()));
+        }
+        eprintln!(
+            "  '{}' is not in the built-in language set; try one of: \
+             en, de, fr, es, it, pt, ja, ko, zh, ta, hi, ar, ... \
+             (run `ftl2lang --list-langs` for the full list).",
+            trimmed
+        );
+    }
+    Err(AppError::Other(
+        "default source not set after 3 attempts".into(),
+    ))
 }
 
 fn write_config_toml(path: &Path, cfg: &Config) -> Result<(), AppError> {

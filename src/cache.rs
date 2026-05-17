@@ -35,7 +35,9 @@ impl TranslationCache {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let text = std::fs::read_to_string(path)?;
+        // Size-capped read: a corrupted or hostile cache file can't make
+        // us allocate gigabytes before serde sees it.
+        let text = crate::fsutil::read_to_string_capped(path)?;
         serde_json::from_str(&text).map_err(|e| AppError::Other(format!("cache parse: {}", e)))
     }
 

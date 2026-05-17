@@ -3,6 +3,30 @@
 use crate::error::AppError;
 use std::path::Path;
 
+/// Upper bound for any text file we will read fully into memory (config,
+/// side-car, cache). Real instances of these files are kilobytes; this cap
+/// exists so a corrupted or maliciously-crafted file can't make us allocate
+/// gigabytes before serde gets a chance to reject it.
+pub const MAX_TEXT_LOAD_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Read `path` into a `String`, refusing files larger than `MAX_TEXT_LOAD_BYTES`.
+///
+/// Use this for any text file the crate parses in one shot (TOML config,
+/// JSON cache, JSON side-car). Streaming readers don't need this guard.
+pub fn read_to_string_capped(path: &Path) -> Result<String, AppError> {
+    let meta = std::fs::metadata(path)?;
+    if meta.len() > MAX_TEXT_LOAD_BYTES {
+        return Err(AppError::Other(format!(
+            "{} is {} bytes; refusing to load (limit {} bytes). \
+             Delete the file or raise MAX_TEXT_LOAD_BYTES if this is genuine.",
+            path.display(),
+            meta.len(),
+            MAX_TEXT_LOAD_BYTES
+        )));
+    }
+    Ok(std::fs::read_to_string(path)?)
+}
+
 /// Write `contents` to `path` atomically: write to a sibling temp file in the
 /// same directory, then `rename` it over the target.
 ///

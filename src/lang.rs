@@ -18,6 +18,21 @@ pub fn normalize(code: &str) -> String {
     }
 }
 
+/// Whether `code`'s primary subtag is in our built-in language table.
+/// Used by the setup flow to validate `default_source` input before it
+/// lands in the config and confuses a translator backend later.
+pub fn is_known(code: &str) -> bool {
+    let normalised = normalize(code);
+    // display_name returns the input string verbatim when it does not
+    // recognise the code; any other return value means we know it.
+    let primary = normalised
+        .split('-')
+        .next()
+        .unwrap_or(&normalised)
+        .to_string();
+    display_name(&primary) != primary
+}
+
 /// Return a human-readable English name for a normalised language code, falling
 /// back to the code itself when it is not in the built-in table.
 ///

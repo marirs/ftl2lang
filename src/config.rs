@@ -46,7 +46,9 @@ impl Config {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let text = std::fs::read_to_string(path)
+        // Size-capped read: a hostile or corrupted --config target can't
+        // make us swallow gigabytes before toml::from_str rejects it.
+        let text = crate::fsutil::read_to_string_capped(path)
             .map_err(|e| AppError::Config(format!("reading {}: {}", path.display(), e)))?;
         toml::from_str(&text)
             .map_err(|e| AppError::Config(format!("parsing {}: {}", path.display(), e)))
